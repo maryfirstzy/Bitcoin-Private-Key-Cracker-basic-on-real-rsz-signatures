@@ -77,6 +77,7 @@ The algorithm:
 **Use Case:** When nonces are generated with a known linear relationship (e.g., counter-based RNG).
 
 ### Method 2: Brute Force (k₁ from 1 upwards)
+<img width="1730" height="813" alt="image" src="https://github.com/user-attachments/assets/c34b4699-b45e-4e94-a693-3ce90c7f225d" />
 
 This method searches for `k₁` by brute force, starting from 1.
 
