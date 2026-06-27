@@ -1,194 +1,232 @@
-DONATE: bc1qps62cyk9f9unmdkc9k3ccj9e2h8ywfhg2j53ec
+🔐 ECDSA Nonce Attack Suite - 3 Signature Recovery
+https://img.shields.io/badge/License-MIT-yellow.svg
+https://img.shields.io/badge/C++-11-blue.svg
+https://img.shields.io/badge/OpenSSL-3.0-green.svg
 
-Built with ❤️ for the crypto research community.
+📝 Description
+A comprehensive ECDSA private key recovery tool that exploits vulnerabilities in nonce (k) generation. The program implements three distinct attack methods to recover the private key from the secp256k1 curve using three ECDSA signatures.
 
-video: https://www.youtube.com/watch?v=1cVfrP3Y2Qo
+🎯 Goal
+Recover the private key (d) from the secp256k1 curve using three ECDSA signatures that potentially have weak, predictable, or related nonces (k values).
 
-
-# 🔐 ECDSA Nonce Reuse Attack - 3 Signature Brute Force
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![C++](https://img.shields.io/badge/C++-11-blue.svg)](https://isocpp.org/)
-[![OpenSSL](https://img.shields.io/badge/OpenSSL-3.0-green.svg)](https://www.openssl.org/)
-
-## 📝 Description
-
-This program exploits the vulnerability related to nonce (k) reuse in ECDSA signatures to recover the private key. It implements an advanced search method using 3 digital signatures.
-
-## 🎯 Goal
-
-Recover the private key (d) from the secp256k1 curve using three ECDSA signatures that potentially use the same nonce (k).
-
-## 🔬 Methodology
-
-### Mathematical Problem
-
+🔬 Methodology
+Mathematical Foundation
 For ECDSA signatures we have the following system of equations:
-s1 = (z1 + r1d) / k1 (mod n)
-s2 = (z2 + r2d) / k2 (mod n)
-s3 = (z3 + r3*d) / k3 (mod n)
 
+text
+s1 = (z1 + r1*d) / k1  (mod n)
+s2 = (z2 + r2*d) / k2  (mod n)
+s3 = (z3 + r3*d) / k3  (mod n)
 Where:
-- `s` - signature component
-- `z` - message hash
-- `r` - signature component (x-coordinate of point)
-- `d` - private key (target)
-- `k` - nonce (random value)
-- `n` - curve order
 
-### 🔑 Key Assumption
+s - signature component
 
-The program assumes that `k1 = k2 = k` (the same nonce used for signatures 1 and 2).
+z - message hash (transaction hash)
 
-**⭐ CRITICAL OBSERVATION:**
+r - signature component (x-coordinate of k*G point)
 
-From this assumption we get the system:
-s1 = (z1 + r1d) / k
-s2 = (z2 + r2d) / k
+d - private key (target)
 
-text
+k - nonce (ephemeral key, must be random)
 
-Solving this system yields:
-d = (s1z2 - s2z1) / (s2r1 - s1r2) (mod n)
-k = (z1 + r1*d) / s1 (mod n)
+n - curve order (secp256k1)
 
-**Most importantly - these calculated `d` and `k` produce SIGNATURES IDENTICAL to the real ones!**
+⚡ Three Attack Methods
+Method 1: Direct Formula (k₂ = k₁ + Δ)
+This method searches for a linear relationship between nonces: k₂ = k₁ + Δ.
 
-We can verify this:
-s1_calculated = (z1 + r1d) / k
-s2_calculated = (z2 + r2d) / k
+Mathematical Derivation:
 
-And we get:
-s1_calculated == s1 (real) ✅
-s2_calculated == s2 (real) ✅
-
-**This means that every solution to our system is mathematically correct - the signatures are identical to the real ones!**
-
-The only problem is that the calculated `d` may not be the real private key if the assumption `k1 = k2` is false. But...
-
-### 💡 Why This Has a Chance of Success
-
-#### 1. **Every Solution is Mathematically Correct**
-
-This is the most important advantage of this method! When we find `d` and `k` from the system:
-- Signature 1 is 100% identical to the real one ✅
-- Signature 2 is 100% identical to the real one ✅
-- Signature 3 is also verified and matches ✅
-
-**This means we don't waste time checking incorrect signatures** - every found solution is mathematically correct!
-
-#### 2. **Relationship Between Nonces**
-
-If `k1` and `k2` are the real nonces for the signatures, then:
-k2 = k1 + Δ (where Δ is the difference)
-
-Our program assumes `Δ = 0` and finds `d'` and `k'`. The difference between the real `d` and the found `d'` is:
-d' = d + Δ * (s1r2 - s2r1) / (s1z2 - s2z1)
+When k₂ = k₁ + Δ, we can derive:
 
 text
+d = (s₂*z₁ - s₁*z₂ + Δ*s₁*s₂) / (s₁*r₂ - s₂*r₁)  (mod n)
+The algorithm:
 
-**Conclusion**: When `Δ` is small, `d'` is close to `d`. By searching through consecutive `k1` values, we explore all possible `Δ`.
+Iterates Δ from 0 to max_delta (default: 10,000,000)
 
-#### 3. **Public Key Verification - The Final Test**
+For each Δ, calculates d using the formula
 
-Since every solution produces correct signatures, the only way to find the real key is to check whether `d` generates the expected public key:
+Verifies all three signatures match
 
-```cpp
-EC_POINT_mul(group, calculated_pub, d, NULL, NULL, ctx);
-if (EC_POINT_cmp(group, calculated_pub, expected_pub, ctx) == 0) {
-    // FOUND THE REAL PRIVATE KEY!
-}
-4. Method Efficiency
-Single random attempt: Chance 1/2^256 - practically zero
+Checks if k₂ = k₁ + Δ holds
 
-Our method: Every k1 produces correct signatures ✅
+Validates the public key
 
-Speed: ~1-5 million attempts/second
+⚠️ Important: This method requires UNNORMALIZED s values (low-s normalization breaks the formula).
 
-We only test the public key: Very fast operation
+Use Case: When nonces are generated with a known linear relationship (e.g., counter-based RNG).
 
-🎯 Practical Success Scenarios
-This method has a chance of success when:
+Method 2: Brute Force (k₁ from 1 upwards)
+This method searches for k₁ by brute force, starting from 1.
 
-k1 and k2 are close (difference < 10^6) - fast key recovery
+Algorithm:
 
-The same nonce was used (ideal case) - instant solution
+For each k₁ from 1 to max_attempts:
 
-k1 and k2 were generated by RNG with low entropy
+Calculates k₂ and k₃ from the system of equations
 
-The RNG implementation has a flaw causing repeated or similar nonce values
+Verifies all three signatures match
 
-📊 Example Output
-========================================
-SEARCHING WITH 3 SIGNATURES
-========================================
-Looking for pubkey: 04766671d3b6d677...
+Checks the public key
 
-Initial k1: 145175022681F8E5...
+Stops when the correct private key is found
 
-Starting search...
+Use Case: When k₁ is small (weak RNG, low entropy, or buggy implementation).
 
-[#1000] Attempts: 1000 | Time: 1s
-  d = F4D7CCB7341C9492... (does not match pubkey)
-  Signature 2: ✅ OK
-  Signature 3: ✅ OK
-  Pubkey on curve: ✅ YES
-  Pubkey match:   ❌ NO
+Method 3: Random Search (Random k₁)
+This method generates random k₁ values and tests them.
 
-💾 Progress saved... (attempts: 60000)
+Algorithm:
 
-[#2000] Attempts: 2000 | Time: 2s
-  ...
+Generates random 64-bit k₁ values
+
+For each random k₁:
+
+Calculates k₂ and k₃ from the system
+
+Verifies all three signatures match
+
+Checks the public key
+
+Stops when the correct private key is found
+
+Use Case: When k₁ is large but you want to try random guesses (similar to lottery).
+
+📊 Performance
+Method	Speed	Success Condition
+Method 1	< 1 second	Known linear relationship k₂ = k₁ + Δ
+Method 2	~4000 k₁/s	Small k₁ (< 1,000,000)
+Method 3	~4000 attempts/s	Lucky random guess
 🚀 Installation & Usage
 Requirements
 bash
-sudo apt-get install libssl-dev
-sudo apt-get install g++ make
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install libssl-dev build-essential
+
+# macOS
+brew install openssl
+
+# Arch Linux
+sudo pacman -S openssl base-devel
 Compilation
 bash
-g++ -std=c++11 -o ecdsa-attack ecdsa-attack.cpp -lssl -lcrypto -pthread
+# Basic compilation
+g++ -std=c++11 -O2 -o ecdsa-attack ecdsa-attack.cpp -lssl -lcrypto
+
+# With optimizations
+g++ -std=c++11 -O3 -march=native -o ecdsa-attack ecdsa-attack.cpp -lssl -lcrypto
 Usage
+Replace the test data in main() with your signatures:
+
+cpp
+string pubkey_hex = "04...";
+string r1_hex = "...", s1_hex = "...", z1_hex = "...";
+string r2_hex = "...", s2_hex = "...", z2_hex = "...";
+string r3_hex = "...", s3_hex = "...", z3_hex = "...";
+Compile and run:
+
 bash
-# Normal run
+g++ -std=c++11 -O2 ecdsa-attack.cpp -o ecdsa-attack -lssl -lcrypto
 ./ecdsa-attack
-
-# With manual starting point
-./ecdsa-attack [k1_hex] [attempts]
 📁 Output Files
-progress.txt - Progress save (can be resumed)
+File	Description
+found_private_key_direct.txt	Key found via Method 1
+found_private_key_bruteforce.txt	Key found via Method 2
+found_private_key_random.txt	Key found via Method 3
+🔬 Test Cases
+Test Case 1: Linear Relationship (Method 1)
+python
+k1 = 0x12345
+k2 = k1 + 0x100  # Δ = 256
+k3 = k1 + 0x200  # Δ = 512
+Important: s values must be UNNORMALIZED!
 
-found_private_key.txt - Found private key (hex only)
+python
+# DO NOT normalize s!
+s = ((z + r * d) * inverse_mod(k, order)) % order
+# if s > order // 2:
+#     s = order - s  # <- DON'T DO THIS!
+Test Case 2: Small k₁ (Method 2)
+python
+k1 = 0x12345  # Small value
+k2 = random  # Any value
+k3 = random  # Any value
+Test Case 3: Random Search (Method 3)
+python
+k1 = random large  # 64-bit random
+k2 = random
+k3 = random
+🧪 Example Output
+text
+========================================
+SEARCHING WITH 3 SIGNATURES - 3 MODES
+========================================
+Looking for pubkey: 04f9ca894225446120bec36db4819cac...
 
-📈 Performance
-Single thread: ~100k solutions/second
+Input data:
+  Signature 1: r1 = e963ffdf... s1 = 389c5839...
+  Signature 2: r2 = 077be39f... s2 = 29254b4c...
+  Signature 3: r3 = c4b9ba86... s3 = 578a8a4b...
 
-30 threads: ~3 million solutions/second
+======================================================================
+========================================
+MODE 1: SEARCHING FOR k2 = k1 + Δ
+========================================
+Searching Δ from 0 to 10000000
 
-Verification: Only public key check (very fast)
+Starting Δ search...
+Progress shown every 1000 attempts
 
-No time waste: Every solution has correct signatures
+  [Δ = 1000] Time: 0s
+    k1 = 651867A0...
+    k2 = 651867A0...
+    k3 = 16274497...
 
-🔐 Educational Significance
-This program demonstrates:
+✅ KEY FOUND DIRECTLY!
+   Δ = 256 (0x100)
+   k1 = 0000000000000000000000000000000000000000000000000000000000012345
+   k2 = 0000000000000000000000000000000000000000000000000000000000012445
+   k3 = 0000000000000000000000000000000000000000000000000000000000012545
+   d  = DDD7D19C659AE145E1F15A6F6D3B0F5A8EED6B35353CFAE93258A0E3D9CD77C1
+   Time: 0s
 
-How ECDSA works mathematically
+✅ Key saved to file: found_private_key_direct.txt
+🎯 Real-World Scenarios
+This attack can be successful in cases like:
 
-Why reusing the same nonce is dangerous
+PS3 Private Key Hack (2010) - Sony used the same k for all signatures
 
-That correct signatures don't always mean the correct key
+Bitcoin Transaction Reuse Attacks - Nonce reuse in transactions
 
-Methods of attacking digital signatures
+Android RNG Bug - Poor entropy in random number generator
 
-The importance of a good random number generator
+Weak RNG Implementations - Nonces from time or small seed values
+
+Counter-based Nonces - k₂ = k₁ + 1 type relationships
 
 ⚠️ Important Notes
-Runtime: Can be very long (days, weeks)
+Normalization Matters!
+Method 1 requires UNNORMALIZED s values (low-s normalization breaks the formula)
 
-Hardware requirements: Multiple threads recommended (30+)
+Methods 2 and 3 work with BOTH normalized and unnormalized s
 
-Memory: Low requirements (< 100MB)
+Bitcoin and most cryptocurrencies use low-s normalization
 
-Educational purpose: Program is for understanding ECDSA vulnerabilities
+Runtime
+Method 1: < 1 second (if relationship exists)
+
+Method 2: Depends on k₁ size (~1 second per 4000 attempts)
+
+Method 3: Probabilistic, no guaranteed time
+
+Hardware Requirements
+Memory: < 100 MB
+
+CPU: Faster = better
+
+Multi-threading: Not currently implemented (future feature)
 
 📚 References
 RFC 6979 - Deterministic ECDSA
@@ -197,10 +235,68 @@ SEC 2: Recommended Elliptic Curve Domain Parameters
 
 ECDSA Nonce Reuse Attack
 
+Bitcoin Nonce Reuse Statistics
+
 📝 License
 MIT License - for educational use only
 
-⚠️ WARNING: This program is for educational purposes only. Do not use it to attack real systems.
+⚠️ WARNING
+This program is for educational purposes only. Do not use it to attack real systems or steal cryptocurrencies. Understanding these vulnerabilities is crucial for building more secure systems.
+
+🧪 Generator Script
+Use the included Python script to generate test cases:
+
+python
+python3 generate_test.py
+This creates test data with:
+
+Known linear relationships (for Method 1)
+
+Small nonces (for Method 2)
+
+Various test scenarios
+
+Made for educational purposes. Use responsibly. 🔐
+
+python
+python3 generate_test.py
+This will create:
+============================================================
+WY GENEROWANE DANE TESTOWE
+============================================================
+
+(venv) daro@mojkomputer:/mnt/c/Users/opini/Desktop/ALLKRYPTO/BreakingECDSAwithLLL$ python3 testpodpisy.py
+string pubkey_hex = "04f9ca894225446120bec36db4819cac96417e3590d1e6c7c8b70d2edf4c0bfa9d843fb9e16b6b34f67193d863f2bd45617163a56b9528b1053f0fdef6173f2c46";
+
+string r1_hex = "e963ffdfe34e63b68aeb42a5826e08af087660e0dac1c3e79f7625ca4e6ae482";
+string s1_hex = "389c58392292e9cd6b777ddb093869a0b82839464c665f318b1d658cf840ad92";
+string z1_hex = "289e5175e02c788c2d442cfe81d6be0533d8c13e253ef763fda45d37accfe4d4";
+
+string r2_hex = "077be39ffaa0f27084ae102226ca6fc6e8ecc1b1ede683898b0bea201f09d30f";
+string s2_hex = "29254b4c151d689930cdd3c0ffaec4881dc0977654ea5b8019d6dc7be06c0949";
+string z2_hex = "a78521e49048b6e0d368d3fba417fc20c7546272dafa78a8a173fcca6c81233b";
+
+string r3_hex = "c4b9ba86dc6537ada1562f7a1f8de117b6beee4394a488a384ddaa76613bf3af";
+string s3_hex = "578a8a4b75de032701eaa9062a66e2a5fd4130493ff8d4b539748e26240041e2";
+string z3_hex = "89da2bd31a5d008c84323c9693f12f09e62a75a688a55f2a6fd24660afba5660";
+
+// d = ddd7d19c659ae145e1f15a6f6d3b0f5a8eed6b35353cfae93258a0e3d9cd77c1
+// k1 = 0x12345, k2 = 0x12445, k3 = 0x12545
+(venv) daro@mojkomputer:/mnt/c/Users/opini/Desktop/ALLKRYPTO/BreakingECDSAwithLLL$
+
+============================================================
+SPRAWDZENIE:
+============================================================
+Program obliczy początkowe k1 = 0x624f3bd2cbbea66202388ffa695fe374e389bf302c9aa8a785f55af01eef156d
+Twoje k1 = 0x12345
+⚠️ Program będzie musiał przeszukać 44466652965357683209636304439155918596911642408961063251733839822447602168360 wartości k1
+   (to około 44466652965357681660706993772162769907544647152472412715774099096338432.00 milionów)
+
+✅ Dane zapisano do pliku: test_signatures.txt
+<img width="1544" height="673" alt="image" src="https://github.com/user-attachments/assets/0c515dda-44a6-48c6-ba94-0dddfea6956c" />
 
 
 
+Custom difficulty cases
+
+Made for educational purposes. Use responsibly. 🔐
