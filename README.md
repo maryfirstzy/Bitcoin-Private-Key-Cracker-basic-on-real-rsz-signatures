@@ -5,6 +5,10 @@
 [![C++](https://img.shields.io/badge/C++-11-blue.svg)](https://isocpp.org/)
 [![OpenSSL](https://img.shields.io/badge/OpenSSL-3.0-green.svg)](https://www.openssl.org/)
 
+youtube: https://www.youtube.com/watch?v=1cVfrP3Y2Qo
+DONATE: bc1qps62cyk9f9unmdkc9k3ccj9e2h8ywfhg2j53ec
+
+Built with ❤️ for the crypto research community.
 ## 📝 Description
 
 A comprehensive ECDSA private key recovery tool that exploits vulnerabilities in nonce (k) generation. The program implements three distinct attack methods to recover the private key from the secp256k1 curve using three ECDSA signatures.
