@@ -3,6 +3,7 @@
 #include <string>
 #include <chrono>
 #include <fstream>
+#include <random>
 #include <openssl/ec.h>
 #include <openssl/obj_mac.h>
 #include <openssl/bn.h>
@@ -34,31 +35,521 @@ void saveFoundKey(const string& filename, BIGNUM* d) {
     }
 }
 
-// Zapis postępu
-void saveProgress(const string& filename, BIGNUM* k1, unsigned long long attempts) {
-    ofstream file(filename);
-    if (file.is_open()) {
-        char* k1_hex = BN_bn2hex(k1);
-        file << k1_hex << endl;
-        file << attempts << endl;
-        file.close();
-        OPENSSL_free(k1_hex);
+// ============================================
+// TRYB 1: BEZPOŚREDNI WZÓR (k2 = k1 + Δ) - POPRAWNY!
+// ============================================
+bool try_direct_formula_with_delta(BIGNUM* r1, BIGNUM* s1, BIGNUM* z1,
+                                   BIGNUM* r2, BIGNUM* s2, BIGNUM* z2,
+                                   BIGNUM* r3, BIGNUM* s3, BIGNUM* z3,
+                                   const BIGNUM* order, BN_CTX* ctx,
+                                   BIGNUM* d, EC_POINT* expected_pub, EC_GROUP* group,
+                                   unsigned long long max_delta = 10000000) {
+    
+    cout << "========================================" << endl;
+    cout << "TRYB 1: SZUKANIE ZALEŻNOŚCI k2 = k1 + Δ" << endl;
+    cout << "========================================" << endl;
+    cout << "Szukam Δ od 0 do " << max_delta << endl << endl;
+    
+    BIGNUM* numerator = BN_new();
+    BIGNUM* denominator = BN_new();
+    BIGNUM* temp1 = BN_new();
+    BIGNUM* temp2 = BN_new();
+    BIGNUM* s1_s2 = BN_new();
+    BIGNUM* delta_bn = BN_new();
+    BIGNUM* inv = BN_new();
+    BIGNUM* delta_times_s1_s2 = BN_new();
+    
+    // Do weryfikacji
+    BIGNUM* k1_calc = BN_new();
+    BIGNUM* k2_calc = BN_new();
+    BIGNUM* k3_calc = BN_new();
+    BIGNUM* s2_check = BN_new();
+    BIGNUM* s3_check = BN_new();
+    BIGNUM* r_d = BN_new();
+    BIGNUM* k_inv = BN_new();
+    BIGNUM* temp = BN_new();
+    
+    EC_POINT* calculated_pub = EC_POINT_new(group);
+    
+    unsigned long long delta_found = 0;
+    bool found = false;
+    auto start = chrono::high_resolution_clock::now();
+    auto last_progress = start;
+    
+    cout << "Rozpoczynam przeszukiwanie Δ..." << endl;
+    cout << "Postęp będzie wyświetlany co 1000 prób" << endl << endl;
+    
+    for (unsigned long long delta = 0; delta <= max_delta; delta++) {
+        // Wyświetl postęp co 1000
+        if (delta % 1000 == 0 && delta > 0) {
+            auto now = chrono::high_resolution_clock::now();
+            auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
+            
+            char* k1_hex = BN_bn2hex(k1_calc);
+            char* k2_hex = BN_bn2hex(k2_calc);
+            char* k3_hex = BN_bn2hex(k3_calc);
+            
+            cout << "  [Δ = " << delta << "] Czas: " << elapsed << "s" << endl;
+            cout << "    k1 = " << k1_hex << endl;
+            cout << "    k2 = " << k2_hex << endl;
+            cout << "    k3 = " << k3_hex << endl;
+            
+            OPENSSL_free(k1_hex);
+            OPENSSL_free(k2_hex);
+            OPENSSL_free(k3_hex);
+        }
+        
+        BN_set_word(delta_bn, delta);
+        
+        // ============================================
+        // OBLICZ d ZE WZORU: 
+        // d = (s2*z1 - s1*z2 + Δ*s1*s2) / (s1*r2 - s2*r1)
+        // ============================================
+        
+        // Licznik: s2*z1 - s1*z2 + Δ*s1*s2
+        BN_mod_mul(temp1, s2, z1, order, ctx);
+        BN_mod_mul(temp2, s1, z2, order, ctx);
+        BN_mod_sub(numerator, temp1, temp2, order, ctx);
+        
+        BN_mod_mul(s1_s2, s1, s2, order, ctx);
+        BN_mod_mul(delta_times_s1_s2, delta_bn, s1_s2, order, ctx);
+        BN_mod_add(numerator, numerator, delta_times_s1_s2, order, ctx);
+        
+        // Mianownik: s1*r2 - s2*r1
+        BN_mod_mul(temp1, s1, r2, order, ctx);
+        BN_mod_mul(temp2, s2, r1, order, ctx);
+        BN_mod_sub(denominator, temp1, temp2, order, ctx);
+        
+        if (BN_is_zero(denominator)) continue;
+        
+        BN_mod_inverse(inv, denominator, order, ctx);
+        BN_mod_mul(d, numerator, inv, order, ctx);
+        
+        // ============================================
+        // SPRAWDŹ CZY TEN d JEST POPRAWNY
+        // ============================================
+        
+        // Oblicz k1 = (z1 + r1*d) / s1
+        BN_mod_mul(temp, r1, d, order, ctx);
+        BN_mod_add(temp, z1, temp, order, ctx);
+        BN_mod_inverse(inv, s1, order, ctx);
+        BN_mod_mul(k1_calc, temp, inv, order, ctx);
+        
+        // Oblicz k2 = (z2 + r2*d) / s2
+        BN_mod_mul(temp, r2, d, order, ctx);
+        BN_mod_add(temp, z2, temp, order, ctx);
+        BN_mod_inverse(inv, s2, order, ctx);
+        BN_mod_mul(k2_calc, temp, inv, order, ctx);
+        
+        // Oblicz k3 = (z3 + r3*d) / s3
+        BN_mod_mul(temp, r3, d, order, ctx);
+        BN_mod_add(temp, z3, temp, order, ctx);
+        BN_mod_inverse(inv, s3, order, ctx);
+        BN_mod_mul(k3_calc, temp, inv, order, ctx);
+        
+        // ============================================
+        // SPRAWDŹ WSZYSTKIE 3 PODPISY
+        // ============================================
+        
+        // Sprawdź s2
+        BN_mod_inverse(inv, k2_calc, order, ctx);
+        BN_mod_mul(r_d, r2, d, order, ctx);
+        BN_mod_add(temp, z2, r_d, order, ctx);
+        BN_mod_mul(s2_check, inv, temp, order, ctx);
+        
+        // Sprawdź s3
+        BN_mod_inverse(inv, k3_calc, order, ctx);
+        BN_mod_mul(r_d, r3, d, order, ctx);
+        BN_mod_add(temp, z3, r_d, order, ctx);
+        BN_mod_mul(s3_check, inv, temp, order, ctx);
+        
+        bool s2_ok = (BN_cmp(s2_check, s2) == 0);
+        bool s3_ok = (BN_cmp(s3_check, s3) == 0);
+        
+        // Sprawdź czy k2 = k1 + Δ
+        BN_mod_sub(temp, k2_calc, k1_calc, order, ctx);
+        bool delta_ok = (BN_cmp(temp, delta_bn) == 0);
+        
+        // ============================================
+        // JAK WSZYSTKO OK - SPRAWDŹ PUBKEY
+        // ============================================
+        if (s2_ok && s3_ok && delta_ok) {
+            EC_POINT_mul(group, calculated_pub, d, NULL, NULL, ctx);
+            if (EC_POINT_cmp(group, calculated_pub, expected_pub, ctx) == 0) {
+                delta_found = delta;
+                found = true;
+                break;
+            }
+        }
     }
+    
+    auto now = chrono::high_resolution_clock::now();
+    auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
+    
+    if (found) {
+        char* d_hex = BN_bn2hex(d);
+        char* k1_hex = BN_bn2hex(k1_calc);
+        char* k2_hex = BN_bn2hex(k2_calc);
+        char* k3_hex = BN_bn2hex(k3_calc);
+        
+        cout << "\n✅ ZNALEZIONO KLUCZ BEZPOŚREDNIO!" << endl;
+        cout << "   Δ = " << delta_found << " (0x" << hex << delta_found << dec << ")" << endl;
+        cout << "   k1 = " << k1_hex << endl;
+        cout << "   k2 = " << k2_hex << endl;
+        cout << "   k3 = " << k3_hex << endl;
+        cout << "   d  = " << d_hex << endl;
+        cout << "   Czas: " << elapsed << "s" << endl;
+        
+        OPENSSL_free(d_hex);
+        OPENSSL_free(k1_hex);
+        OPENSSL_free(k2_hex);
+        OPENSSL_free(k3_hex);
+    } else {
+        cout << "\n❌ Nie znaleziono Δ w zakresie 0-" << max_delta << endl;
+        cout << "   Czas: " << elapsed << "s" << endl;
+    }
+    
+    BN_free(numerator);
+    BN_free(denominator);
+    BN_free(temp1);
+    BN_free(temp2);
+    BN_free(s1_s2);
+    BN_free(delta_bn);
+    BN_free(inv);
+    BN_free(delta_times_s1_s2);
+    BN_free(k1_calc);
+    BN_free(k2_calc);
+    BN_free(k3_calc);
+    BN_free(s2_check);
+    BN_free(s3_check);
+    BN_free(r_d);
+    BN_free(k_inv);
+    BN_free(temp);
+    EC_POINT_free(calculated_pub);
+    
+    return found;
+}
+// ============================================
+// TRYB 2: PRZESZUKIWANIE OD 1 W GÓRĘ
+// ============================================
+bool try_bruteforce(BIGNUM* r1, BIGNUM* s1, BIGNUM* z1,
+                    BIGNUM* r2, BIGNUM* s2, BIGNUM* z2,
+                    BIGNUM* r3, BIGNUM* s3, BIGNUM* z3,
+                    const BIGNUM* order, BN_CTX* ctx,
+                    BIGNUM* d, EC_POINT* expected_pub, EC_GROUP* group,
+                    unsigned long long max_attempts = 1000000000) {
+    
+    cout << "========================================" << endl;
+    cout << "TRYB 2: PRZESZUKIWANIE OD k1 = 1" << endl;
+    cout << "========================================" << endl;
+    cout << "Maksymalna liczba prób: " << max_attempts << endl << endl;
+    
+    BIGNUM* k1 = BN_new();
+    BIGNUM* k2 = BN_new();
+    BIGNUM* k3 = BN_new();
+    BIGNUM* temp = BN_new();
+    BIGNUM* inv = BN_new();
+    BIGNUM* one = BN_new();
+    BN_one(one);
+    
+    BN_set_word(k1, 1);
+    
+    BIGNUM* r2_s1 = BN_new();
+    BIGNUM* r1_s2 = BN_new();
+    BIGNUM* r3_s1 = BN_new();
+    BIGNUM* r1_s3 = BN_new();
+    BIGNUM* r3_s2 = BN_new();
+    BIGNUM* r2_s3 = BN_new();
+    
+    BN_mod_mul(r2_s1, r2, s1, order, ctx);
+    BN_mod_mul(r1_s2, r1, s2, order, ctx);
+    BN_mod_mul(r3_s1, r3, s1, order, ctx);
+    BN_mod_mul(r1_s3, r1, s3, order, ctx);
+    BN_mod_mul(r3_s2, r3, s2, order, ctx);
+    BN_mod_mul(r2_s3, r2, s3, order, ctx);
+    
+    BIGNUM* RHS1 = BN_new();
+    BIGNUM* RHS2 = BN_new();
+    BIGNUM* RHS3 = BN_new();
+    
+    BN_mod_mul(temp, r2, z1, order, ctx);
+    BN_mod_mul(inv, r1, z2, order, ctx);
+    BN_mod_sub(RHS1, temp, inv, order, ctx);
+    
+    BN_mod_mul(temp, r3, z1, order, ctx);
+    BN_mod_mul(inv, r1, z3, order, ctx);
+    BN_mod_sub(RHS2, temp, inv, order, ctx);
+    
+    BN_mod_mul(temp, r3, z2, order, ctx);
+    BN_mod_mul(inv, r2, z3, order, ctx);
+    BN_mod_sub(RHS3, temp, inv, order, ctx);
+    
+    BIGNUM* s2_check = BN_new();
+    BIGNUM* s3_check = BN_new();
+    BIGNUM* r_d = BN_new();
+    BIGNUM* k_inv = BN_new();
+    EC_POINT* calculated_pub = EC_POINT_new(group);
+    
+    unsigned long long attempts = 0;
+    unsigned long long solutions_found = 0;
+    auto start = chrono::high_resolution_clock::now();
+    auto last_progress = start;
+    bool found = false;
+    
+    cout << "Rozpoczynam przeszukiwanie od k1 = 1..." << endl;
+    cout << "Postęp będzie wyświetlany co 1000 prób" << endl << endl;
+    
+    while (attempts < max_attempts) {
+        attempts++;
+        
+        // Wyświetl postęp co 1000
+        if (attempts % 1000 == 0) {
+            auto now = chrono::high_resolution_clock::now();
+            auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
+            char* k1_hex = BN_bn2hex(k1);
+            
+            cout << "  [k1 = " << k1_hex << "] Czas: " << elapsed << "s | Rozwiązania: " << solutions_found << endl;
+            
+            OPENSSL_free(k1_hex);
+        }
+        
+        BN_mod_mul(temp, r2_s1, k1, order, ctx);
+        BN_mod_sub(temp, temp, RHS1, order, ctx);
+        BN_mod_inverse(inv, r1_s2, order, ctx);
+        BN_mod_mul(k2, temp, inv, order, ctx);
+        
+        BN_mod_mul(temp, r3_s1, k1, order, ctx);
+        BN_mod_sub(temp, temp, RHS2, order, ctx);
+        BN_mod_inverse(inv, r1_s3, order, ctx);
+        BN_mod_mul(k3, temp, inv, order, ctx);
+        
+        BN_mod_mul(temp, r3_s2, k2, order, ctx);
+        BN_mod_mul(inv, r2_s3, k3, order, ctx);
+        BN_mod_sub(temp, temp, inv, order, ctx);
+        bool eq3_ok = (BN_cmp(temp, RHS3) == 0);
+        
+        if (eq3_ok) {
+            BN_mod_mul(temp, s1, k1, order, ctx);
+            BN_mod_sub(temp, temp, z1, order, ctx);
+            BN_mod_inverse(inv, r1, order, ctx);
+            BN_mod_mul(d, temp, inv, order, ctx);
+            
+            BN_mod_inverse(inv, k2, order, ctx);
+            BN_mod_mul(r_d, r2, d, order, ctx);
+            BN_mod_add(temp, z2, r_d, order, ctx);
+            BN_mod_mul(s2_check, inv, temp, order, ctx);
+            
+            BN_mod_inverse(inv, k3, order, ctx);
+            BN_mod_mul(r_d, r3, d, order, ctx);
+            BN_mod_add(temp, z3, r_d, order, ctx);
+            BN_mod_mul(s3_check, inv, temp, order, ctx);
+            
+            bool s2_ok = (BN_cmp(s2_check, s2) == 0);
+            bool s3_ok = (BN_cmp(s3_check, s3) == 0);
+            
+            if (s2_ok && s3_ok) {
+                solutions_found++;
+                EC_POINT_mul(group, calculated_pub, d, NULL, NULL, ctx);
+                if (EC_POINT_cmp(group, calculated_pub, expected_pub, ctx) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        BN_add(k1, k1, one);
+    }
+    
+    auto now = chrono::high_resolution_clock::now();
+    auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
+    
+    if (found) {
+        char* d_hex = BN_bn2hex(d);
+        char* k1_hex = BN_bn2hex(k1);
+        cout << "\n✅ ZNALEZIONO KLUCZ PRZEZ PRZESZUKIWANIE!" << endl;
+        cout << "   k1 = " << k1_hex << endl;
+        cout << "   d = " << d_hex << endl;
+        cout << "   Próby: " << attempts << endl;
+        cout << "   Czas: " << elapsed << "s" << endl;
+        OPENSSL_free(d_hex);
+        OPENSSL_free(k1_hex);
+    } else {
+        cout << "\n❌ Nie znaleziono w " << attempts << " próbach" << endl;
+        cout << "   Czas: " << elapsed << "s" << endl;
+    }
+    
+    BN_free(k1); BN_free(k2); BN_free(k3);
+    BN_free(temp); BN_free(inv); BN_free(one);
+    BN_free(r2_s1); BN_free(r1_s2); BN_free(r3_s1);
+    BN_free(r1_s3); BN_free(r3_s2); BN_free(r2_s3);
+    BN_free(RHS1); BN_free(RHS2); BN_free(RHS3);
+    BN_free(s2_check); BN_free(s3_check);
+    BN_free(r_d); BN_free(k_inv);
+    EC_POINT_free(calculated_pub);
+    
+    return found;
 }
 
-// Wczytaj postęp
-bool loadProgress(const string& filename, BIGNUM* k1, unsigned long long& attempts) {
-    ifstream file(filename);
-    if (file.is_open()) {
-        string k1_hex;
-        getline(file, k1_hex);
-        file >> attempts;
-        file.close();
+// ============================================
+// TRYB 3: LOSOWE k1
+// ============================================
+bool try_random(BIGNUM* r1, BIGNUM* s1, BIGNUM* z1,
+                BIGNUM* r2, BIGNUM* s2, BIGNUM* z2,
+                BIGNUM* r3, BIGNUM* s3, BIGNUM* z3,
+                const BIGNUM* order, BN_CTX* ctx,
+                BIGNUM* d, EC_POINT* expected_pub, EC_GROUP* group,
+                unsigned long long max_attempts = 10000000) {
+    
+    cout << "========================================" << endl;
+    cout << "TRYB 3: LOSOWE k1" << endl;
+    cout << "========================================" << endl;
+    cout << "Maksymalna liczba prób: " << max_attempts << endl << endl;
+    
+    random_device rd_device;
+    mt19937_64 gen(rd_device());
+    uniform_int_distribution<unsigned long long> dis(1, 0xFFFFFFFFFFFFFFFFULL);
+    
+    BIGNUM* k1 = BN_new();
+    BIGNUM* k2 = BN_new();
+    BIGNUM* k3 = BN_new();
+    BIGNUM* temp = BN_new();
+    BIGNUM* inv = BN_new();
+    
+    BIGNUM* r2_s1 = BN_new();
+    BIGNUM* r1_s2 = BN_new();
+    BIGNUM* r3_s1 = BN_new();
+    BIGNUM* r1_s3 = BN_new();
+    BIGNUM* r3_s2 = BN_new();
+    BIGNUM* r2_s3 = BN_new();
+    
+    BN_mod_mul(r2_s1, r2, s1, order, ctx);
+    BN_mod_mul(r1_s2, r1, s2, order, ctx);
+    BN_mod_mul(r3_s1, r3, s1, order, ctx);
+    BN_mod_mul(r1_s3, r1, s3, order, ctx);
+    BN_mod_mul(r3_s2, r3, s2, order, ctx);
+    BN_mod_mul(r2_s3, r2, s3, order, ctx);
+    
+    BIGNUM* RHS1 = BN_new();
+    BIGNUM* RHS2 = BN_new();
+    BIGNUM* RHS3 = BN_new();
+    
+    BN_mod_mul(temp, r2, z1, order, ctx);
+    BN_mod_mul(inv, r1, z2, order, ctx);
+    BN_mod_sub(RHS1, temp, inv, order, ctx);
+    
+    BN_mod_mul(temp, r3, z1, order, ctx);
+    BN_mod_mul(inv, r1, z3, order, ctx);
+    BN_mod_sub(RHS2, temp, inv, order, ctx);
+    
+    BN_mod_mul(temp, r3, z2, order, ctx);
+    BN_mod_mul(inv, r2, z3, order, ctx);
+    BN_mod_sub(RHS3, temp, inv, order, ctx);
+    
+    BIGNUM* s2_check = BN_new();
+    BIGNUM* s3_check = BN_new();
+    BIGNUM* r_d = BN_new();
+    BIGNUM* k_inv = BN_new();
+    EC_POINT* calculated_pub = EC_POINT_new(group);
+    
+    unsigned long long attempts = 0;
+    unsigned long long solutions_found = 0;
+    auto start = chrono::high_resolution_clock::now();
+    auto last_progress = start;
+    bool found = false;
+    
+    cout << "Rozpoczynam losowe przeszukiwanie..." << endl;
+    cout << "Postęp będzie wyświetlany co 1000 prób" << endl << endl;
+    
+    while (attempts < max_attempts) {
+        attempts++;
         
-        BN_hex2bn(&k1, k1_hex.c_str());
-        return true;
+        if (attempts % 1000 == 0) {
+            auto now = chrono::high_resolution_clock::now();
+            auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
+            char* k1_hex = BN_bn2hex(k1);
+            
+            cout << "  [Próba " << attempts << "] k1 = " << k1_hex << " | Czas: " << elapsed << "s" << endl;
+            
+            OPENSSL_free(k1_hex);
+        }
+        
+        unsigned long long rand_val = dis(gen);
+        BN_set_word(k1, rand_val);
+        if (BN_is_zero(k1)) continue;
+        
+        BN_mod_mul(temp, r2_s1, k1, order, ctx);
+        BN_mod_sub(temp, temp, RHS1, order, ctx);
+        BN_mod_inverse(inv, r1_s2, order, ctx);
+        BN_mod_mul(k2, temp, inv, order, ctx);
+        
+        BN_mod_mul(temp, r3_s1, k1, order, ctx);
+        BN_mod_sub(temp, temp, RHS2, order, ctx);
+        BN_mod_inverse(inv, r1_s3, order, ctx);
+        BN_mod_mul(k3, temp, inv, order, ctx);
+        
+        BN_mod_mul(temp, r3_s2, k2, order, ctx);
+        BN_mod_mul(inv, r2_s3, k3, order, ctx);
+        BN_mod_sub(temp, temp, inv, order, ctx);
+        bool eq3_ok = (BN_cmp(temp, RHS3) == 0);
+        
+        if (eq3_ok) {
+            BN_mod_mul(temp, s1, k1, order, ctx);
+            BN_mod_sub(temp, temp, z1, order, ctx);
+            BN_mod_inverse(inv, r1, order, ctx);
+            BN_mod_mul(d, temp, inv, order, ctx);
+            
+            BN_mod_inverse(inv, k2, order, ctx);
+            BN_mod_mul(r_d, r2, d, order, ctx);
+            BN_mod_add(temp, z2, r_d, order, ctx);
+            BN_mod_mul(s2_check, inv, temp, order, ctx);
+            
+            BN_mod_inverse(inv, k3, order, ctx);
+            BN_mod_mul(r_d, r3, d, order, ctx);
+            BN_mod_add(temp, z3, r_d, order, ctx);
+            BN_mod_mul(s3_check, inv, temp, order, ctx);
+            
+            bool s2_ok = (BN_cmp(s2_check, s2) == 0);
+            bool s3_ok = (BN_cmp(s3_check, s3) == 0);
+            
+            if (s2_ok && s3_ok) {
+                solutions_found++;
+                EC_POINT_mul(group, calculated_pub, d, NULL, NULL, ctx);
+                if (EC_POINT_cmp(group, calculated_pub, expected_pub, ctx) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+        }
     }
-    return false;
+    
+    auto now = chrono::high_resolution_clock::now();
+    auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
+    
+    if (found) {
+        char* d_hex = BN_bn2hex(d);
+        char* k1_hex = BN_bn2hex(k1);
+        cout << "\n✅ ZNALEZIONO KLUCZ LOSOWO!" << endl;
+        cout << "   k1 = " << k1_hex << endl;
+        cout << "   d = " << d_hex << endl;
+        cout << "   Próby: " << attempts << endl;
+        cout << "   Czas: " << elapsed << "s" << endl;
+        OPENSSL_free(d_hex);
+        OPENSSL_free(k1_hex);
+    } else {
+        cout << "\n❌ Nie znaleziono w " << attempts << " losowych próbach" << endl;
+        cout << "   Czas: " << elapsed << "s" << endl;
+    }
+    
+    BN_free(k1); BN_free(k2); BN_free(k3);
+    BN_free(temp); BN_free(inv);
+    BN_free(r2_s1); BN_free(r1_s2); BN_free(r3_s1);
+    BN_free(r1_s3); BN_free(r3_s2); BN_free(r2_s3);
+    BN_free(RHS1); BN_free(RHS2); BN_free(RHS3);
+    BN_free(s2_check); BN_free(s3_check);
+    BN_free(r_d); BN_free(k_inv);
+    EC_POINT_free(calculated_pub);
+    
+    return found;
 }
 
 int main() {
@@ -68,32 +559,33 @@ int main() {
     const BIGNUM* order = EC_GROUP_get0_order(group);
     BN_CTX* ctx = BN_CTX_new();
 
+    // ============================================
+    // DANE TESTOWE
+    // ============================================
     string pubkey_hex = "04766671d3b6d67717b38a4ef1653ad2e39e695a70d535e996b0825635698fa2338d5d81be10736c67f61aabc6d260caaf65ec8bc6b8ae7b14604cab07665e8db1";
     EC_POINT* expected_pub = hex2point(group, pubkey_hex);
-
-
-
 
     // ============================================
     // PODPIS 1
     // ============================================
-    string r1_hex = "201db779231dcaedc787b90140526e9f9ce3c74e9d73f036b1fa1407c66fcbce";
-    string s1_hex = "87ddbd5ca40a0d916b2d88be3581f259352f5ef5b974ad7f7f9cd358c187c131";
-    string z1_hex = "689a6b8ea4539162ac06ddfc181c8bc59430b5f9fc5b97bdc71407002350e12e";
+string r1_hex = "201db779231dcaedc787b90140526e9f9ce3c74e9d73f036b1fa1407c66fcbce";
+string s1_hex = "87ddbd5ca40a0d916b2d88be3581f259352f5ef5b974ad7f7f9cd358c187c131";
+string z1_hex = "689a6b8ea4539162ac06ddfc181c8bc59430b5f9fc5b97bdc71407002350e12e";
 
     // ============================================
     // PODPIS 2
     // ============================================
-    string r2_hex = "a89686f2f65708664fc0a0481ce8d10e87194b05de5aec60197301d6a7c22d06";
-    string s2_hex = "4d5f815b46da6e5b73ca9dafc411bb6010e7cc5874ee39e1424fb4f79ab62908";
-    string z2_hex = "7f8f2e19355dcfdadd85c4320ace3a211c284e32258842c8573e107da04bcb2a";
+string r2_hex = "a89686f2f65708664fc0a0481ce8d10e87194b05de5aec60197301d6a7c22d06";
+string s2_hex = "4d5f815b46da6e5b73ca9dafc411bb6010e7cc5874ee39e1424fb4f79ab62908";
+string z2_hex = "7f8f2e19355dcfdadd85c4320ace3a211c284e32258842c8573e107da04bcb2a";
 
     // ============================================
-    // PODPIS 3 - DODATKOWY!
+    // PODPIS 3
     // ============================================
-    string r3_hex = "05a4c7a92843580dad6d19b725446b5b379cd9dfaa0b1415fdc56fbcfba79950";
-    string s3_hex = "c95730077d0b79281c629f0590f5beeb266b8e9e64a63df14a296bed368a6ecf";
-    string z3_hex = "46431004e246659c25d0fe9ab314d5f39b79831f4ae21f880acc1eae4354627f";
+string r3_hex = "05a4c7a92843580dad6d19b725446b5b379cd9dfaa0b1415fdc56fbcfba79950";
+string s3_hex = "c95730077d0b79281c629f0590f5beeb266b8e9e64a63df14a296bed368a6ecf";
+string z3_hex = "46431004e246659c25d0fe9ab314d5f39b79831f4ae21f880acc1eae4354627f";
+
 
     BIGNUM* r1 = hex2bn(r1_hex);
     BIGNUM* s1 = hex2bn(s1_hex);
@@ -106,262 +598,58 @@ int main() {
     BIGNUM* z3 = hex2bn(z3_hex);
 
     cout << "========================================" << endl;
-    cout << "SZUKANIE Z 3 PODPISAMI" << endl;
+    cout << "SZUKANIE Z 3 PODPISAMI - 3 TRYBY" << endl;
     cout << "========================================" << endl;
     cout << "Szukam pubkey: " << pubkey_hex << endl << endl;
+    cout << "Dane wejściowe:" << endl;
+    cout << "  Podpis 1: r1 = " << r1_hex.substr(0, 16) << "... s1 = " << s1_hex.substr(0, 16) << "..." << endl;
+    cout << "  Podpis 2: r2 = " << r2_hex.substr(0, 16) << "... s2 = " << s2_hex.substr(0, 16) << "..." << endl;
+    cout << "  Podpis 3: r3 = " << r3_hex.substr(0, 16) << "... s3 = " << s3_hex.substr(0, 16) << "..." << endl;
+    cout << endl;
 
-    // ============================================
-    // OBLICZ POCZĄTKOWE k1 Z UKŁADU (k1=k2)
-    // ============================================
-    BIGNUM* k1 = BN_new();
-    BIGNUM* k2 = BN_new();
-    BIGNUM* k3 = BN_new();
     BIGNUM* d = BN_new();
-    BIGNUM* temp = BN_new();
-    BIGNUM* temp2 = BN_new();
-    BIGNUM* numerator = BN_new();
-    BIGNUM* denominator = BN_new();
-    BIGNUM* inv = BN_new();
-
-    // Oblicz d = (s1*z2 - s2*z1) / (s2*r1 - s1*r2)
-    BN_mod_mul(temp, s1, z2, order, ctx);
-    BN_mod_mul(temp2, s2, z1, order, ctx);
-    BN_mod_sub(numerator, temp, temp2, order, ctx);
-    
-    BN_mod_mul(temp, s2, r1, order, ctx);
-    BN_mod_mul(temp2, s1, r2, order, ctx);
-    BN_mod_sub(denominator, temp, temp2, order, ctx);
-    
-    if (BN_is_zero(denominator)) {
-        cout << "BŁĄD: Mianownik = 0!" << endl;
-        return 1;
-    }
-    
-    BN_mod_inverse(inv, denominator, order, ctx);
-    BN_mod_mul(d, numerator, inv, order, ctx);
-    
-    // Oblicz k1 TYLKO RAZ!
-    BN_mod_mul(temp, r1, d, order, ctx);
-    BN_mod_add(temp, z1, temp, order, ctx);
-    BN_mod_inverse(inv, s1, order, ctx);
-    BN_mod_mul(k1, temp, inv, order, ctx);
+    bool found = false;
 
     // ============================================
-    // WCZYTAJ ZAPISANY POSTĘP (JEŚLI ISTNIEJE)
+    // TRYB 1: BEZPOŚREDNI WZÓR (k2 = k1 + Δ) z weryfikacją 3 podpisów
     // ============================================
-    unsigned long long attempts = 0;
-    string progress_file = "progress.txt";
-    
-    if (loadProgress(progress_file, k1, attempts)) {
-        cout << "✅ Wczytano zapisany postęp!" << endl;
-        cout << "   k1 = " << BN_bn2hex(k1) << endl;
-        cout << "   Próby: " << attempts << endl << endl;
-    } else {
-        cout << "Początkowe k1: " << BN_bn2hex(k1) << endl << endl;
+    cout << "\n" << string(70, '=') << endl;
+    found = try_direct_formula_with_delta(r1, s1, z1, r2, s2, z2, r3, s3, z3,
+                                          order, ctx, d, expected_pub, group, 10000000);
+    if (found) {
+        saveFoundKey("found_private_key_direct.txt", d);
+        goto cleanup;
     }
 
     // ============================================
-    // GŁÓWNA PĘTLA - PRZESZUKIWANIE
+    // TRYB 2: PRZESZUKIWANIE
     // ============================================
-    BIGNUM* s2_check = BN_new();
-    BIGNUM* s3_check = BN_new();
-    BIGNUM* rd = BN_new();
-    BIGNUM* k_inv = BN_new();
-    BIGNUM* one = BN_new();
-    BN_one(one);
-
-    EC_POINT* calculated_pub = EC_POINT_new(group);
-
-    unsigned long long solutions_found = 0;
-    auto start = chrono::high_resolution_clock::now();
-    auto last_progress = start;
-    auto last_save = start;
-
-    cout << "Rozpoczynam przeszukiwanie..." << endl << endl;
-
-    while (true) {
-        attempts++;
-
-        // ============================================
-        // OBLICZ d Z PIERWSZEGO RÓWNANIA
-        // ============================================
-        BN_mod_mul(temp, s1, k1, order, ctx);
-        BN_mod_sub(temp, temp, z1, order, ctx);
-        BN_mod_inverse(inv, r1, order, ctx);
-        BN_mod_mul(d, temp, inv, order, ctx);
-
-        // ============================================
-        // OBLICZ k2 I k3
-        // ============================================
-        BN_mod_mul(rd, r2, d, order, ctx);
-        BN_mod_add(temp, z2, rd, order, ctx);
-        BN_mod_inverse(inv, s2, order, ctx);
-        BN_mod_mul(k2, temp, inv, order, ctx);
-
-        BN_mod_mul(rd, r3, d, order, ctx);
-        BN_mod_add(temp, z3, rd, order, ctx);
-        BN_mod_inverse(inv, s3, order, ctx);
-        BN_mod_mul(k3, temp, inv, order, ctx);
-
-        // ============================================
-        // SPRAWDŹ WSZYSTKIE 3 PODPISY
-        // ============================================
-        BN_mod_inverse(inv, k2, order, ctx);
-        BN_mod_mul(rd, r2, d, order, ctx);
-        BN_mod_add(temp, z2, rd, order, ctx);
-        BN_mod_mul(s2_check, inv, temp, order, ctx);
-        
-        BN_mod_inverse(inv, k3, order, ctx);
-        BN_mod_mul(rd, r3, d, order, ctx);
-        BN_mod_add(temp, z3, rd, order, ctx);
-        BN_mod_mul(s3_check, inv, temp, order, ctx);
-
-        bool s2_ok = (BN_cmp(s2_check, s2) == 0);
-        bool s3_ok = (BN_cmp(s3_check, s3) == 0);
-
-        if (s2_ok && s3_ok) {
-            solutions_found++;
-            
-            // ============================================
-            // SPRAWDŹ CZY d GENERUJE POPRAWNY PUBKEY
-            // ============================================
-            EC_POINT_mul(group, calculated_pub, d, NULL, NULL, ctx);
-            
-            // SPRAWDŹ CZY PUBKEY LEŻY NA KRZYWEJ
-            bool on_curve = EC_POINT_is_on_curve(group, calculated_pub, ctx);
-            
-            // PORÓWNAJ Z OCZEKIWANYM PUBKEY
-            bool pubkey_ok = (EC_POINT_cmp(group, calculated_pub, expected_pub, ctx) == 0);
-
-            // ============================================
-            // WYŚWIETLANIE CO 1000 ROZWIĄZAŃ
-            // ============================================
-            if (solutions_found % 1000 == 0) {
-                char* d_hex = BN_bn2hex(d);
-                char* k1_hex = BN_bn2hex(k1);
-                char* k2_hex = BN_bn2hex(k2);
-                char* k3_hex = BN_bn2hex(k3);
-                
-                auto now = chrono::high_resolution_clock::now();
-                auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
-                
-                cout << "[#" << solutions_found << "] Próby: " << attempts 
-                     << " | Czas: " << elapsed << "s" << endl;
-                cout << "  d = " << d_hex << endl;
-                cout << "  k1 = " << k1_hex << endl;
-                cout << "  k2 = " << k2_hex << endl;
-                cout << "  k3 = " << k3_hex << endl;
-                cout << "  Podpis 2: " << (s2_ok ? "✅ OK" : "❌ BŁĄD") << endl;
-                cout << "  Podpis 3: " << (s3_ok ? "✅ OK" : "❌ BŁĄD") << endl;
-                cout << "  Pubkey na krzywej: " << (on_curve ? "✅ TAK" : "❌ NIE") << endl;
-                cout << "  Pubkey zgodny:    " << (pubkey_ok ? "✅ ZGADZA SIĘ!" : "❌ NIE PASUJE") << endl << endl;
-                
-                OPENSSL_free(d_hex);
-                OPENSSL_free(k1_hex);
-                OPENSSL_free(k2_hex);
-                OPENSSL_free(k3_hex);
-            }
-
-            // ============================================
-            // JAK PUBKEY JEST OK - ZAPISZ I ZATRZYMAJ
-            // ============================================
-            if (pubkey_ok) {
-                auto now = chrono::high_resolution_clock::now();
-                auto elapsed = chrono::duration_cast<chrono::seconds>(now - start).count();
-
-                cout << "\n**************************************************" << endl;
-                cout << "*** ZNALEZIONO PRAWDZIWY KLUCZ PRYWATNY! ***" << endl;
-                cout << "**************************************************" << endl;
-                cout << "Czas: " << elapsed << "s" << endl;
-                cout << "Próby: " << attempts << endl;
-                cout << "Rozwiązania: " << solutions_found << endl;
-
-                char* d_hex = BN_bn2hex(d);
-                char* k1_hex = BN_bn2hex(k1);
-                char* k2_hex = BN_bn2hex(k2);
-                char* k3_hex = BN_bn2hex(k3);
-
-                cout << "d = " << d_hex << endl;
-                cout << "k1 = " << k1_hex << endl;
-                cout << "k2 = " << k2_hex << endl;
-                cout << "k3 = " << k3_hex << endl;
-
-                // ZAPISZ TYLKO d DO PLIKU
-                saveFoundKey("found_private_key.txt", d);
-                
-                // USUŃ PLIK POSTĘPU (bo już znalezione)
-                remove(progress_file.c_str());
-
-                OPENSSL_free(d_hex);
-                OPENSSL_free(k1_hex);
-                OPENSSL_free(k2_hex);
-                OPENSSL_free(k3_hex);
-
-                break; // ZATRZYMAJ SIĘ
-            }
-        }
-
-        // ============================================
-        // PRZEJDŹ DO NASTĘPNEGO k1
-        // ============================================
-        BN_add(k1, k1, one);
-        if (BN_cmp(k1, order) >= 0) {
-            BN_sub(k1, k1, order);
-        }
-
-        // ============================================
-        // ZAPISZ POSTĘP CO MINUTĘ
-        // ============================================
-        auto now = chrono::high_resolution_clock::now();
-        auto save_diff = chrono::duration_cast<chrono::seconds>(now - last_save).count();
-        
-        if (save_diff >= 60) {  // Co 60 sekund
-            saveProgress(progress_file, k1, attempts);
-            last_save = now;
-            
-            // Pokaż że zapisano
-            cout << "💾 Zapisano postęp... (próby: " << attempts << ")" << endl;
-        }
-
-        // Status co 1M prób
-        if (attempts % 1000000 == 0) {
-            auto diff = chrono::duration_cast<chrono::seconds>(now - last_progress).count();
-            double speed = 1000000.0 / (diff > 0 ? diff : 1);
-            
-            cout << "\n[STATUS] Próby: " << attempts 
-                 << " | Rozwiązań: " << solutions_found 
-                 << " | Czas: " << chrono::duration_cast<chrono::seconds>(now - start).count() << "s" 
-                 << " | Szybkość: " << fixed << setprecision(0) << speed << " k1/s" << endl << endl;
-            
-            last_progress = now;
-        }
+    cout << "\n" << string(70, '=') << endl;
+    found = try_bruteforce(r1, s1, z1, r2, s2, z2, r3, s3, z3,
+                           order, ctx, d, expected_pub, group, 1000000000);
+    if (found) {
+        saveFoundKey("found_private_key_bruteforce.txt", d);
+        goto cleanup;
     }
 
-    // Czyszczenie
-    BN_free(r1);
-    BN_free(s1);
-    BN_free(z1);
-    BN_free(r2);
-    BN_free(s2);
-    BN_free(z2);
-    BN_free(r3);
-    BN_free(s3);
-    BN_free(z3);
-    BN_free(k1);
-    BN_free(k2);
-    BN_free(k3);
+    // ============================================
+    // TRYB 3: LOSOWE
+    // ============================================
+    cout << "\n" << string(70, '=') << endl;
+    found = try_random(r1, s1, z1, r2, s2, z2, r3, s3, z3,
+                       order, ctx, d, expected_pub, group, 10000000);
+    if (found) {
+        saveFoundKey("found_private_key_random.txt", d);
+        goto cleanup;
+    }
+
+    cout << "\n❌ NIE ZNALEZIONO KLUCZA ŻADNYM TRYBEM!" << endl;
+
+cleanup:
+    BN_free(r1); BN_free(s1); BN_free(z1);
+    BN_free(r2); BN_free(s2); BN_free(z2);
+    BN_free(r3); BN_free(s3); BN_free(z3);
     BN_free(d);
-    BN_free(temp);
-    BN_free(temp2);
-    BN_free(numerator);
-    BN_free(denominator);
-    BN_free(inv);
-    BN_free(s2_check);
-    BN_free(s3_check);
-    BN_free(rd);
-    BN_free(k_inv);
-    BN_free(one);
-    EC_POINT_free(calculated_pub);
     EC_POINT_free(expected_pub);
     EC_GROUP_free(group);
     BN_CTX_free(ctx);
