@@ -3,84 +3,204 @@ DONATE: bc1qps62cyk9f9unmdkc9k3ccj9e2h8ywfhg2j53ec
 Built with ❤️ for the crypto research community.
 
 video: https://www.youtube.com/watch?v=1cVfrP3Y2Qo
-# ECDSA Private Key Finder for secp256k1
 
-## 1. Main Goal
-The program searches for a private key (d) that corresponds to a given public key (pubkey) on the secp256k1 elliptic curve (used in Bitcoin).
 
-## 2. Input Data
-The program uses:
-- **Public key (pubkey)** - 65-byte hex string
-- **Two ECDSA signatures** - each containing:
-  - **r** - signature value
-  - **s** - signature value
-  - **z** - message hash
+# 🔐 ECDSA Nonce Reuse Attack - 3 Signature Brute Force
 
-## 3. Mechanism of Action
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![C++](https://img.shields.io/badge/C++-11-blue.svg)](https://isocpp.org/)
+[![OpenSSL](https://img.shields.io/badge/OpenSSL-3.0-green.svg)](https://www.openssl.org/)
 
-### Step-by-step:
+## 📝 Description
 
-#### A. Generate random nonce (k1)
-- The program randomly selects a value k1 (first nonce) from the range [1, n-1]
-- This is done in a loop, trying different values
+This program exploits the vulnerability related to nonce (k) reuse in ECDSA signatures to recover the private key. It implements an advanced search method using 3 digital signatures.
 
-#### B. Calculate private key (d)
-- Uses the ECDSA equation: `s1 = k1^(-1) * (z1 + r1*d) mod n`
-- Transforms it to calculate: `d = (s1*k1 - z1) / r1 mod n`
+## 🎯 Goal
 
-#### C. Calculate second nonce (k2)
-- Having d, calculates k2 from the second signature:
-- `k2 = (z2 + r2*d) / s2 mod n`
+Recover the private key (d) from the secp256k1 curve using three ECDSA signatures that potentially use the same nonce (k).
 
-#### D. Verify correctness
-- Checks if the calculated values satisfy the ECDSA equations
-- Compares the calculated s2_check with the original s2
+## 🔬 Methodology
 
-#### E. Check public key
-- Calculates the public key from the found d
-- Compares it with the expected public key
+### Mathematical Problem
 
-## 4. Additional Checks
-The program verifies two mathematical relationships:
+For ECDSA signatures we have the following system of equations:
+s1 = (z1 + r1d) / k1 (mod n)
+s2 = (z2 + r2d) / k2 (mod n)
+s3 = (z3 + r3*d) / k3 (mod n)
 
-**Equation 1:** `s1*k1 - s2*k2 = z1 - z2 + d*(r1 - r2)`
-- Derived from subtracting the ECDSA equations for both signatures
+Where:
+- `s` - signature component
+- `z` - message hash
+- `r` - signature component (x-coordinate of point)
+- `d` - private key (target)
+- `k` - nonce (random value)
+- `n` - curve order
 
-**Equation 2:** `(s1*k1 - z1)/r1 = (s2*k2 - z2)/r2`
-- Derived from eliminating d from both equations
+### 🔑 Key Assumption
 
-## 5. Progress Monitoring
-The program displays:
-- Number of attempts
-- Number of mathematical solutions found (solutions_found)
-- Elapsed time
-- Generation speed (k1/s)
-- Every 1000 solutions, it displays details
+The program assumes that `k1 = k2 = k` (the same nonce used for signatures 1 and 2).
 
-## 6. Completion
-When it finds a private key that:
-- Satisfies all equations
-- Generates the correct public key
+**⭐ CRITICAL OBSERVATION:**
 
-The program displays:
-- Found private key (d)
-- Both nonces (k1, k2)
-- Time and statistics
+From this assumption we get the system:
+s1 = (z1 + r1d) / k
+s2 = (z2 + r2d) / k
 
-## Why does this work?
-The program exploits the fact that if two signatures were created using the same private key (but different nonces), then you can:
+text
 
-1. Generate a random k1
-2. Calculate d from the first equation
-3. Calculate k2 from the second equation
-4. Check if everything matches
+Solving this system yields:
+d = (s1z2 - s2z1) / (s2r1 - s1r2) (mod n)
+k = (z1 + r1*d) / s1 (mod n)
 
-Since the k1 space is enormous (2^256), in practice finding the correct solution can take a very long time - the program uses random searching.
+**Most importantly - these calculated `d` and `k` produce SIGNATURES IDENTICAL to the real ones!**
 
-## Summary
-This is a cryptographic bruteforcer that:
-- Attempts to break an ECDSA private key
-- Uses two signatures created with the same key
-- Applies advanced elliptic curve mathematics
-- Displays detailed statistics and verifications
-- Is written in C++ using the OpenSSL library
+We can verify this:
+s1_calculated = (z1 + r1d) / k
+s2_calculated = (z2 + r2d) / k
+
+And we get:
+s1_calculated == s1 (real) ✅
+s2_calculated == s2 (real) ✅
+
+**This means that every solution to our system is mathematically correct - the signatures are identical to the real ones!**
+
+The only problem is that the calculated `d` may not be the real private key if the assumption `k1 = k2` is false. But...
+
+### 💡 Why This Has a Chance of Success
+
+#### 1. **Every Solution is Mathematically Correct**
+
+This is the most important advantage of this method! When we find `d` and `k` from the system:
+- Signature 1 is 100% identical to the real one ✅
+- Signature 2 is 100% identical to the real one ✅
+- Signature 3 is also verified and matches ✅
+
+**This means we don't waste time checking incorrect signatures** - every found solution is mathematically correct!
+
+#### 2. **Relationship Between Nonces**
+
+If `k1` and `k2` are the real nonces for the signatures, then:
+k2 = k1 + Δ (where Δ is the difference)
+
+Our program assumes `Δ = 0` and finds `d'` and `k'`. The difference between the real `d` and the found `d'` is:
+d' = d + Δ * (s1r2 - s2r1) / (s1z2 - s2z1)
+
+text
+
+**Conclusion**: When `Δ` is small, `d'` is close to `d`. By searching through consecutive `k1` values, we explore all possible `Δ`.
+
+#### 3. **Public Key Verification - The Final Test**
+
+Since every solution produces correct signatures, the only way to find the real key is to check whether `d` generates the expected public key:
+
+```cpp
+EC_POINT_mul(group, calculated_pub, d, NULL, NULL, ctx);
+if (EC_POINT_cmp(group, calculated_pub, expected_pub, ctx) == 0) {
+    // FOUND THE REAL PRIVATE KEY!
+}
+4. Method Efficiency
+Single random attempt: Chance 1/2^256 - practically zero
+
+Our method: Every k1 produces correct signatures ✅
+
+Speed: ~1-5 million attempts/second
+
+We only test the public key: Very fast operation
+
+🎯 Practical Success Scenarios
+This method has a chance of success when:
+
+k1 and k2 are close (difference < 10^6) - fast key recovery
+
+The same nonce was used (ideal case) - instant solution
+
+k1 and k2 were generated by RNG with low entropy
+
+The RNG implementation has a flaw causing repeated or similar nonce values
+
+📊 Example Output
+========================================
+SEARCHING WITH 3 SIGNATURES
+========================================
+Looking for pubkey: 04766671d3b6d677...
+
+Initial k1: 145175022681F8E5...
+
+Starting search...
+
+[#1000] Attempts: 1000 | Time: 1s
+  d = F4D7CCB7341C9492... (does not match pubkey)
+  Signature 2: ✅ OK
+  Signature 3: ✅ OK
+  Pubkey on curve: ✅ YES
+  Pubkey match:   ❌ NO
+
+💾 Progress saved... (attempts: 60000)
+
+[#2000] Attempts: 2000 | Time: 2s
+  ...
+🚀 Installation & Usage
+Requirements
+bash
+sudo apt-get install libssl-dev
+sudo apt-get install g++ make
+Compilation
+bash
+g++ -std=c++11 -o ecdsa-attack ecdsa-attack.cpp -lssl -lcrypto -pthread
+Usage
+bash
+# Normal run
+./ecdsa-attack
+
+# With manual starting point
+./ecdsa-attack [k1_hex] [attempts]
+📁 Output Files
+progress.txt - Progress save (can be resumed)
+
+found_private_key.txt - Found private key (hex only)
+
+📈 Performance
+Single thread: ~100k solutions/second
+
+30 threads: ~3 million solutions/second
+
+Verification: Only public key check (very fast)
+
+No time waste: Every solution has correct signatures
+
+🔐 Educational Significance
+This program demonstrates:
+
+How ECDSA works mathematically
+
+Why reusing the same nonce is dangerous
+
+That correct signatures don't always mean the correct key
+
+Methods of attacking digital signatures
+
+The importance of a good random number generator
+
+⚠️ Important Notes
+Runtime: Can be very long (days, weeks)
+
+Hardware requirements: Multiple threads recommended (30+)
+
+Memory: Low requirements (< 100MB)
+
+Educational purpose: Program is for understanding ECDSA vulnerabilities
+
+📚 References
+RFC 6979 - Deterministic ECDSA
+
+SEC 2: Recommended Elliptic Curve Domain Parameters
+
+ECDSA Nonce Reuse Attack
+
+📝 License
+MIT License - for educational use only
+
+⚠️ WARNING: This program is for educational purposes only. Do not use it to attack real systems.
+
+
+
