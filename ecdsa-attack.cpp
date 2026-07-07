@@ -570,21 +570,21 @@ int main() {
     // ============================================
 string r1_hex = "201db779231dcaedc787b90140526e9f9ce3c74e9d73f036b1fa1407c66fcbce";
 string s1_hex = "87ddbd5ca40a0d916b2d88be3581f259352f5ef5b974ad7f7f9cd358c187c131";
-string z1_hex = "689a6b8ea4539162ac06ddfc181c8bc59430b5f9fc5b97bdc71407002350e12e";
+string z1_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
 
     // ============================================
     // PODPIS 2
     // ============================================
 string r2_hex = "a89686f2f65708664fc0a0481ce8d10e87194b05de5aec60197301d6a7c22d06";
 string s2_hex = "4d5f815b46da6e5b73ca9dafc411bb6010e7cc5874ee39e1424fb4f79ab62908";
-string z2_hex = "7f8f2e19355dcfdadd85c4320ace3a211c284e32258842c8573e107da04bcb2a";
+string z2_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
 
     // ============================================
     // PODPIS 3
     // ============================================
 string r3_hex = "05a4c7a92843580dad6d19b725446b5b379cd9dfaa0b1415fdc56fbcfba79950";
 string s3_hex = "c95730077d0b79281c629f0590f5beeb266b8e9e64a63df14a296bed368a6ecf";
-string z3_hex = "46431004e246659c25d0fe9ab314d5f39b79831f4ae21f880acc1eae4354627f";
+string z3_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
 
 
     BIGNUM* r1 = hex2bn(r1_hex);
