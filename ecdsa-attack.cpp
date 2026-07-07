@@ -583,7 +583,7 @@ string z2_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab
     // PODPIS 3
     // ============================================
 string r3_hex = "008c2aa5374a94472649896f3cd7401ec3266145790ce0eb120f4b9e574c8542f9";
-string s3_hex = "c95730077d0b79281c629f0590f5beeb266b8e9e64a63df14a296bed368a6ecf";
+string s3_hex = "094dfb0017e55c05713f3f4717f053e1e53c6c29f19a40180f20f2a92872ce3601";
 string z3_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
 
 
