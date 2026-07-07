@@ -568,7 +568,7 @@ int main() {
     // ============================================
     // PODPIS 1
     // ============================================
-string r1_hex = "201db779231dcaedc787b90140526e9f9ce3c74e9d73f036b1fa1407c66fcbce";
+string r1_hex = "00cd461a1d8323d7727eca4dfde1c6e50da1d2f9a21679076dd4028bb2676a1904";
 string s1_hex = "87ddbd5ca40a0d916b2d88be3581f259352f5ef5b974ad7f7f9cd358c187c131";
 string z1_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
 
