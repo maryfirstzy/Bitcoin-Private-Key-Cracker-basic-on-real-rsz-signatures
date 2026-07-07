@@ -562,7 +562,7 @@ int main() {
     // ============================================
     // DANE TESTOWE
     // ============================================
-    string pubkey_hex = "04766671d3b6d67717b38a4ef1653ad2e39e695a70d535e996b0825635698fa2338d5d81be10736c67f61aabc6d260caaf65ec8bc6b8ae7b14604cab07665e8db1";
+    string pubkey_hex = "04d248432c5a6d2a424b7b5bbce46ba84c19cae0ac26d7e53ff492e13f8ed5f30048b8dff5fa906c0b062c478b6760f63016b914e8b85cbfc719d57945481d73ec";
     EC_POINT* expected_pub = hex2point(group, pubkey_hex);
 
     // ============================================
