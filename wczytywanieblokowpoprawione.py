@@ -151,7 +151,7 @@ def fetch_txids_for_blocks(start_block, end_block):
     return all_txids
 
 if __name__ == "__main__":
-    DEFAULT_START_BLOCK = 200000
+    DEFAULT_START_BLOCK = 200124
     END_BLOCK = 1000000
 
     start_block = odczytaj_ostatni_blok(DEFAULT_START_BLOCK)
