@@ -568,9 +568,9 @@ int main() {
     // ============================================
     // PODPIS 1
     // ============================================
-string r1_hex = "00cd461a1d8323d7727eca4dfde1c6e50da1d2f9a21679076dd4028bb2676a1904";
-string s1_hex = "17dc54486b88610ea7dc66758f53bcd6bde68dba5cb27adcc9f3a23fff0d198e01";
-string z1_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
+string r1_hex = "f06c2455e7fc6e4bcc73ce05a4de8906794082e4ba298d4647c50a7d6ebfe988";
+string s1_hex = "f2ad6ad6791612a5c3a5094c358ee459dbad1821345a008dc9856feb7d142036";
+string z1_hex = "bcf16bdfc712aeb511592ecc73d9c5a4c3a756307d9c00e3a8ed31f7b5bf90c7";
 
     // ============================================
     // PODPIS 2
