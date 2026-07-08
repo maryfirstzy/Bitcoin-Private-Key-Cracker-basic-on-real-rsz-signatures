@@ -582,9 +582,9 @@ string z2_hex = "6cd6b4607b73d5933de63f7f3abe7df79bebb13df549eb9c686d7770784c866
     // ============================================
     // PODPIS 3
     // ============================================
-string r3_hex = "008c2aa5374a94472649896f3cd7401ec3266145790ce0eb120f4b9e574c8542f9";
-string s3_hex = "094dfb0017e55c05713f3f4717f053e1e53c6c29f19a40180f20f2a92872ce3601";
-string z3_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
+string r3_hex = "eab7a6ddead869f8075c5aea0178dd14ce5b61c446c4bb05a33b5f10c5281ded";
+string s3_hex = "f4e7a6fab6aef13aca484ef34bb59295dab2395ee8c7fd15261951b34e33ef8f";
+string z3_hex = "860e0c321be5fd27b340eca63134510baf80180238dc614e4c6765724d9c9bbb";
 
 
     BIGNUM* r1 = hex2bn(r1_hex);
