@@ -575,9 +575,9 @@ string z1_hex = "bcf16bdfc712aeb511592ecc73d9c5a4c3a756307d9c00e3a8ed31f7b5bf90c
     // ============================================
     // PODPIS 2
     // ============================================
-string r2_hex = "0092445bbf5ab9ef44f5210ad79347bdcbdd6f90920ac849309fe1b940c066f74c";
-string s2_hex = "71e5cc5f2cb7c95d91a8e19ca57a24dece0a9e910f452dd9923007970674b64c01";
-string z2_hex = "f8a1b5c089a029321f14b24b1a25b43201e94c82cd5fa9ef59e8b345cf8adab3";
+string r2_hex = "1cd5156d9a3eb0fca2e28244467cb29af6cf5617ba3be9e277879e3ad6421de1";
+string s2_hex = "eb4b452ed360722c9b9b2050e306ed1195e66ed16355c9c95792a3c4701e270c";
+string z2_hex = "6cd6b4607b73d5933de63f7f3abe7df79bebb13df549eb9c686d7770784c8661";
 
     // ============================================
     // PODPIS 3
