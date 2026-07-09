@@ -562,29 +562,29 @@ int main() {
     // ============================================
     // DANE TESTOWE
     // ============================================
-    string pubkey_hex = "048cc0b94178715f03ed3d0bceb368191d0fdd7fc16d806567f6f2c45aecafb8f53e5ef849564072189b9b4f8bfe1564da776567ba359cfb0c05e839bcf65371ab";
+    string pubkey_hex = "04ee0e2a4438785f693b6d3ece91ab915f9e329c7bfa65fe68d21e8ab3ef4107d3c0d42c218d9a4f80561eb6f83a5f6644d4b47ace4adb5a123bdd287e5cfb358d";
     EC_POINT* expected_pub = hex2point(group, pubkey_hex);
 
     // ============================================
     // PODPIS 1
     // ============================================
-string r1_hex = "f06c2455e7fc6e4bcc73ce05a4de8906794082e4ba298d4647c50a7d6ebfe988";
-string s1_hex = "f2ad6ad6791612a5c3a5094c358ee459dbad1821345a008dc9856feb7d142036";
-string z1_hex = "bcf16bdfc712aeb511592ecc73d9c5a4c3a756307d9c00e3a8ed31f7b5bf90c7";
+string r1_hex = "baf2aa695873ee637a1b23b53a78c512e4ea8ed72738badbdac3fe6b2a769176";
+string s1_hex = "b47bbe4d2e405452dfa95bbd6ac3804c38c25f838edafd5ceb3456f3b040b0a6";
+string z1_hex = "d20aff079cd86074eff889e1f4f0fbd0b97ef4eeff378147afc815d8a28552d5";
 
     // ============================================
     // PODPIS 2
     // ============================================
-string r2_hex = "1cd5156d9a3eb0fca2e28244467cb29af6cf5617ba3be9e277879e3ad6421de1";
-string s2_hex = "eb4b452ed360722c9b9b2050e306ed1195e66ed16355c9c95792a3c4701e270c";
-string z2_hex = "6cd6b4607b73d5933de63f7f3abe7df79bebb13df549eb9c686d7770784c8661";
+string r2_hex = "d56a07721d620e6b3c64021713ae2cec9bc831c4d6d32501e347142bff70d078";
+string s2_hex = "4c136bac45a92b2adfc0af27282b494f6dc416535433d36e04057de2bf7cc326";
+string z2_hex = "17ea532a30334538c281467befb5fca7e66c6b1e760f5d17d77cb853c65a3c7d";
 
     // ============================================
     // PODPIS 3
     // ============================================
-string r3_hex = "eab7a6ddead869f8075c5aea0178dd14ce5b61c446c4bb05a33b5f10c5281ded";
-string s3_hex = "f4e7a6fab6aef13aca484ef34bb59295dab2395ee8c7fd15261951b34e33ef8f";
-string z3_hex = "860e0c321be5fd27b340eca63134510baf80180238dc614e4c6765724d9c9bbb";
+string r3_hex = "ceb208031cb6abc374fd0c189a9f8a5ea05f5a68baa37d665c28e52396484cef";
+string s3_hex = "f7f3b63279f4ee697783fe49e0d0b91c20264f96fabe1623bd9a61cbb66cefad";
+string z3_hex = "da7044deeac4a5873a8fee74de8fcffd9e8fde51b67b38ab0293ae17e5d3c405";
 
 
     BIGNUM* r1 = hex2bn(r1_hex);
