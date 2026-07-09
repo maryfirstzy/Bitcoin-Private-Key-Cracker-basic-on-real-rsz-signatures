@@ -219,14 +219,14 @@ int main() {
             key.erase(key.find_last_not_of(" \n\r\t")+1);
             value.erase(0, value.find_first_not_of(" \n\r\t"));
             
-            if (key == "r1") hex_r1 = value;baf2aa695873ee637a1b23b53a78c512e4ea8ed72738badbdac3fe6b2a769176
-            else if (key == "s1") hex_s1 = value;b47bbe4d2e405452dfa95bbd6ac3804c38c25f838edafd5ceb3456f3b040b0a6
-            else if (key == "z1") hex_z1 = value;d20aff079cd86074eff889e1f4f0fbd0b97ef4eeff378147afc815d8a28552d5
-            else if (key == "r2") hex_r2 = value;ceb208031cb6abc374fd0c189a9f8a5ea05f5a68baa37d665c28e52396484cef
-            else if (key == "s2") hex_s2 = value;4c136bac45a92b2adfc0af27282b494f6dc416535433d36e04057de2bf7cc326
-            else if (key == "z2") hex_z2 = value;17ea532a30334538c281467befb5fca7e66c6b1e760f5d17d77cb853c65a3c7d
-            else if (key == "pubkey") hex_pubkey = value;04ee0e2a4438785f693b6d3ece91ab915f9e329c7bfa65fe68d21e8ab3ef4107d3c0d42c218d9a4f80561eb6f83a5f6644d4b47ace4adb5a123bdd287e5cfb358d
-            else if (key == "order") hex_order = value;FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+            if (key == "r1") hex_r1 = value;"baf2aa695873ee637a1b23b53a78c512e4ea8ed72738badbdac3fe6b2a769176";
+            else if (key == "s1") hex_s1 = value;"b47bbe4d2e405452dfa95bbd6ac3804c38c25f838edafd5ceb3456f3b040b0a6";
+            else if (key == "z1") hex_z1 = value;"d20aff079cd86074eff889e1f4f0fbd0b97ef4eeff378147afc815d8a28552d5";
+            else if (key == "r2") hex_r2 = value;"ceb208031cb6abc374fd0c189a9f8a5ea05f5a68baa37d665c28e52396484cef";
+            else if (key == "s2") hex_s2 = value;"4c136bac45a92b2adfc0af27282b494f6dc416535433d36e04057de2bf7cc326";
+            else if (key == "z2") hex_z2 = value;"17ea532a30334538c281467befb5fca7e66c6b1e760f5d17d77cb853c65a3c7d";
+            else if (key == "pubkey") hex_pubkey = value;"04ee0e2a4438785f693b6d3ece91ab915f9e329c7bfa65fe68d21e8ab3ef4107d3c0d42c218d9a4f80561eb6f83a5f6644d4b47ace4adb5a123bdd287e5cfb358d";
+            else if (key == "order") hex_order = value;"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141";
         }
     }
     infile.close();
@@ -264,4 +264,3 @@ int main() {
 
     return 0;
 }
-
